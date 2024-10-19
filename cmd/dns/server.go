@@ -6,13 +6,17 @@ import (
 	"log"
 	"net"
 
+	"github.com/yazmeyaa/bs-dns/internal/answer"
 	"github.com/yazmeyaa/bs-dns/internal/header"
 	"github.com/yazmeyaa/bs-dns/internal/question"
 )
 
 const Address = "127.0.0.1:53"
 
+var nameToIP = make(map[string][]byte)
+
 func main() {
+	nameToIP["game.brawlstars.com"] = []byte{12, 34, 56, 78}
 	udpAddr, err := net.ResolveUDPAddr("udp", Address)
 	if err != nil {
 		log.Fatal("failed to resolve udp address", err)
@@ -29,34 +33,55 @@ func main() {
 	buf := make([]byte, 512)
 	for {
 		size, source, err := udpConn.ReadFromUDP(buf)
-		log.Printf("Received %d bytes from %s", size, source.String())
+		log.Printf("\n==>Ping\n")
 		if err != nil {
 			log.Println("failed to receive data", err)
 			continue
 		}
-
-		log.Printf("received %d bytes from %s", size, source.String())
 
 		if size < 12 {
 			log.Println("invalid DNS query, too small")
 			continue
 		}
 
-		header := header.ReadHeader(buf[:12])
-		log.Printf("ID: %d; QR: %t; QDCount: %d\n", header.ID, header.IsResponse, header.QDCount)
-		header.IsResponse = true
-
-		question, _ := question.ReadQuestion(buf[12:])
+		h := header.ReadHeader(buf[:12])
+		h.IsResponse = true
+		h.ANCount = 0
+		q, _ := question.ReadQuestion(buf[12:])
+		h.QDCount = 1
 
 		var res bytes.Buffer
-		res.Write(header.Encode())
-		res.Write(question.Encode())
+
+		log.Printf("Incoming request for %s\n", q.QName)
+		ip, ok := nameToIP[q.QName]
+		if !ok {
+			log.Println("No record found for:", q.QName)
+			_, err = udpConn.WriteToUDP(res.Bytes(), source)
+			if err != nil {
+				log.Println("Failed to send response:", err)
+			}
+			continue
+		}
+
+		ans := answer.Answer{
+			Name:   q.QName,
+			QType:  question.TYPE_HOST,
+			QClass: question.CLASS_INTERNET,
+			TTL:    300,
+			Data:   ip,
+		}
+		h.ANCount++
+
+		res.Write(h.Encode())
+		res.Write(q.Encode())
+		res.Write(ans.Encode())
 
 		_, err = udpConn.WriteToUDP(res.Bytes(), source)
 		if err != nil {
 			log.Println("Failed to send response:", err)
 		}
-		log.Printf("Response sent\n")
+
+		log.Printf("Resolved name: %s => %s", q.QName, string(ip))
 	}
 
 }

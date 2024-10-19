@@ -73,7 +73,7 @@ func ReadQuestion(data []byte) (Question, int) {
 func (q *Question) Encode() []byte {
 	var encoded []byte
 
-	labels := splitQName(q.QName)
+	labels := SplitQName(q.QName)
 	for _, label := range labels {
 		encoded = append(encoded, byte(len(label)))
 		encoded = append(encoded, label...)
@@ -91,7 +91,7 @@ func (q *Question) Encode() []byte {
 	return encoded
 }
 
-func splitQName(qname string) []string {
+func SplitQName(qname string) []string {
 	var labels []string
 	start := 0
 
