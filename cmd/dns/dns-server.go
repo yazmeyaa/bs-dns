@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"github.com/yazmeyaa/bs-dns/internal/dns/answer"
 	"github.com/yazmeyaa/bs-dns/internal/dns/header"
 	"github.com/yazmeyaa/bs-dns/internal/dns/question"
+	"github.com/yazmeyaa/bs-dns/internal/redis"
 )
 
 const Address = "0.0.0.0:53"
@@ -23,8 +25,14 @@ func main() {
 		log.Fatal(err.Error())
 		return
 	}
+	rc, err := redis.InitRedisConnection(context.Background(), "localhost:6379")
 
-	log.Printf("%+v", db)
+	if err != nil {
+		log.Fatal(err.Error())
+		return
+	}
+
+	log.Printf("%+v\n\n%v", db, rc)
 
 	udpAddr, err := net.ResolveUDPAddr("udp", Address)
 	if err != nil {
