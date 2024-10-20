@@ -6,12 +6,12 @@ import (
 	"log"
 	"net"
 
-	"github.com/yazmeyaa/bs-dns/internal/answer"
-	"github.com/yazmeyaa/bs-dns/internal/header"
-	"github.com/yazmeyaa/bs-dns/internal/question"
+	"github.com/yazmeyaa/bs-dns/internal/dns/answer"
+	"github.com/yazmeyaa/bs-dns/internal/dns/header"
+	"github.com/yazmeyaa/bs-dns/internal/dns/question"
 )
 
-const Address = "127.0.0.1:53"
+const Address = "0.0.0.0:53"
 
 var nameToIP = make(map[string][]byte)
 
@@ -52,10 +52,12 @@ func main() {
 
 		var res bytes.Buffer
 
-		log.Printf("Incoming request for %s\n", q.QName)
 		ip, ok := nameToIP[q.QName]
 		if !ok {
 			log.Println("No record found for:", q.QName)
+			h.ResponseCode = header.RCODE_NAME_ERROR
+			res.Write(h.Encode())
+			res.Write(q.Encode())
 			_, err = udpConn.WriteToUDP(res.Bytes(), source)
 			if err != nil {
 				log.Println("Failed to send response:", err)
@@ -67,10 +69,11 @@ func main() {
 			Name:   q.QName,
 			QType:  question.TYPE_HOST,
 			QClass: question.CLASS_INTERNET,
-			TTL:    300,
+			TTL:    0,
 			Data:   ip,
 		}
 		h.ANCount++
+		h.ResponseCode = header.RCODE_NO_ERROR
 
 		res.Write(h.Encode())
 		res.Write(q.Encode())
@@ -81,7 +84,7 @@ func main() {
 			log.Println("Failed to send response:", err)
 		}
 
-		log.Printf("Resolved name: %s => %s", q.QName, string(ip))
+		log.Printf("Resolved name: %s => %d.%d.%d.%d", q.QName, ip[0], ip[1], ip[2], ip[3])
 	}
 
 }

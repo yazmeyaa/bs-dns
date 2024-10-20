@@ -3,7 +3,7 @@ package answer
 import (
 	"encoding/binary"
 
-	"github.com/yazmeyaa/bs-dns/internal/question"
+	"github.com/yazmeyaa/bs-dns/internal/dns/question"
 )
 
 type Answer struct {
