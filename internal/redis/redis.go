@@ -5,11 +5,15 @@ import (
 	"fmt"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/yazmeyaa/bs-dns/internal/config"
 )
 
-func InitRedisConnection(ctx context.Context, addr string) (*redis.Client, error) {
+func InitRedisConnection(ctx context.Context, config *config.Config) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
-		Addr: addr,
+		Addr:     config.Redis.Host,
+		Username: config.Redis.Username,
+		Password: config.Redis.Password,
+		DB:       config.Redis.Database,
 	})
 
 	err := client.Ping(ctx).Err()
