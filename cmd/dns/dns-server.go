@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 
+	"github.com/yazmeyaa/bs-dns/internal/db"
 	"github.com/yazmeyaa/bs-dns/internal/dns/answer"
 	"github.com/yazmeyaa/bs-dns/internal/dns/header"
 	"github.com/yazmeyaa/bs-dns/internal/dns/question"
@@ -17,6 +18,14 @@ var nameToIP = make(map[string][]byte)
 
 func main() {
 	nameToIP["game.brawlstars.com"] = []byte{12, 34, 56, 78}
+	db, err := db.InitDB()
+	if err != nil {
+		log.Fatal(err.Error())
+		return
+	}
+
+	log.Printf("%+v", db)
+
 	udpAddr, err := net.ResolveUDPAddr("udp", Address)
 	if err != nil {
 		log.Fatal("failed to resolve udp address", err)
