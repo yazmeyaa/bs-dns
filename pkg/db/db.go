@@ -7,7 +7,7 @@ import (
 	"os"
 	"path"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/go-sqlite"
 )
 
 func InitDB() (*sql.DB, error) {
@@ -24,7 +24,7 @@ func InitDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", filePath)
+	db, err := sql.Open("sqlite", filePath)
 	if err != nil {
 		return nil, err
 	}
