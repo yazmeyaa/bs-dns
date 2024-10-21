@@ -1,0 +1,17 @@
+.PHONY: build-dns-server build-proxy build-all dns-server bs-udp-proxy run-all
+
+build-dns-server:
+	go build -o ./build/dns.exe ./cmd/dns/dns-server.go
+
+build-proxy:
+	go build -o ./build/proxy.exe ./cmd/bs_udp_proxy/proxy.go
+
+build-all: build-dns-server build-proxy
+
+dns-server:
+	./build/dns.exe  # Исправлено: запускаем собранный бинарник
+
+bs-udp-proxy:
+	./build/proxy.exe  # Исправлено: запускаем собранный бинарник
+
+run-all: dns-server bs-udp-proxy
