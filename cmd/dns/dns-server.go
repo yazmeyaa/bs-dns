@@ -111,6 +111,13 @@ func main() {
 	}
 
 	r.Save(context.Background(), rc, db)
+	r1 := records.DNSRecord{
+		Label:       "local dns",
+		Description: "local dns",
+		Name:        "dns.magic-lizard.ru",
+		IPAddr:      "217.30.10.72",
+	}
+	r1.Save(context.Background(), rc, db)
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
