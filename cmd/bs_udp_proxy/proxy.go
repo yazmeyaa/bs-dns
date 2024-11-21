@@ -81,6 +81,7 @@ func startBSProxyServer() {
 	buf := make([]byte, 2048)
 
 	for {
+		log.Printf(">>PING\n")
 		n, clientAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Printf("Error receiving data from client: %v", err)
