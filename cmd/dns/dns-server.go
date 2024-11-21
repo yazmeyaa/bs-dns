@@ -107,7 +107,7 @@ func main() {
 		Label:       "Brawl stars",
 		Description: "Brawl stars game traffic",
 		Name:        "game.brawlstarsgame.com",
-		IPAddr:      "192.168.1.79",
+		IPAddr:      "217.30.10.72",
 	}
 
 	r.Save(context.Background(), rc, db)
