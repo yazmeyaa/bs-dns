@@ -126,7 +126,7 @@ func (h *DNSHandler) HandleUDPQuery(udpConn *net.UDPConn, buf []byte) {
 }
 
 func (h *DNSHandler) forwardQuery(query []byte) ([]byte, error) {
-	upstreamServer := "8.8.8.8:53"
+	upstreamServer := "1.1.1.1:53"
 
 	conn, err := net.Dial("udp", upstreamServer)
 	if err != nil {
