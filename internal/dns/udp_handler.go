@@ -67,8 +67,8 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 
 		var query bytes.Buffer
 
-		res.Write(hdr.Encode())
-		res.Write(q.Encode())
+		query.Write(hdr.Encode())
+		query.Write(q.Encode())
 		fwd, err := h.forwardQuery(query.Bytes())
 
 		if err != nil {
