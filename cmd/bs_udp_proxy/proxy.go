@@ -52,7 +52,7 @@ func handleClient(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte, n int
 		return
 	}
 
-	remoteConn.(*net.UDPConn).SetReadDeadline(time.Now().Add(5 * time.Second))
+	remoteConn.(*net.UDPConn).SetReadDeadline(time.Now().Add(45 * time.Second))
 	buf := make([]byte, 2048)
 	n, err = remoteConn.(*net.UDPConn).Read(buf)
 	if err != nil {
