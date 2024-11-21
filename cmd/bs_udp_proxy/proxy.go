@@ -14,8 +14,7 @@ const (
 )
 
 var (
-	clientConnections = make(map[string]*net.UDPConn)
-	mu                sync.Mutex
+	clientConnections = sync.Map{}
 )
 
 func handleClient(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte, n int) {
@@ -25,35 +24,37 @@ func handleClient(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte, n int
 		return
 	}
 
-	mu.Lock()
-	remoteConn, exists := clientConnections[clientAddr.String()]
-	if !exists {
-		remoteConn, err = net.DialUDP("udp", nil, remoteAddr)
+	key := clientAddr.String()
+
+	remoteConn, _ := clientConnections.LoadOrStore(key, func() *net.UDPConn {
+		conn, err := net.DialUDP("udp", nil, remoteAddr)
 		if err != nil {
 			log.Printf("Error connecting to remote server: %v", err)
-			mu.Unlock()
-			return
+			return nil
 		}
-		clientConnections[clientAddr.String()] = remoteConn
 
-		go func(addr string, conn *net.UDPConn) {
+		go func(key string, conn *net.UDPConn) {
 			time.Sleep(5 * time.Minute)
-			mu.Lock()
-			delete(clientConnections, addr)
-			mu.Unlock()
+			clientConnections.Delete(key)
 			conn.Close()
-		}(clientAddr.String(), remoteConn)
-	}
-	mu.Unlock()
+		}(key, conn)
 
-	_, err = remoteConn.Write(data[:n])
+		return conn
+	}())
+
+	if remoteConn == nil {
+		return
+	}
+
+	_, err = remoteConn.(*net.UDPConn).Write(data[:n])
 	if err != nil {
 		log.Printf("Error sending data to remote server: %v", err)
 		return
 	}
 
+	remoteConn.(*net.UDPConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 	buf := make([]byte, 2048)
-	n, err = remoteConn.Read(buf)
+	n, err = remoteConn.(*net.UDPConn).Read(buf)
 	if err != nil {
 		log.Printf("Error receiving data from remote server: %v", err)
 		return
@@ -81,15 +82,14 @@ func startBSProxyServer() {
 	buf := make([]byte, 2048)
 
 	for {
-		log.Printf(">>PING\n")
 		n, clientAddr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Printf("Error receiving data from client: %v", err)
 			continue
 		}
-		log.Printf("Received %d bytes from client %s", n, clientAddr.String())
-
-		go handleClient(conn, clientAddr, buf, n)
+		dataCopy := make([]byte, n)
+		copy(dataCopy, buf[:n])
+		go handleClient(conn, clientAddr, dataCopy, n)
 	}
 }
 
