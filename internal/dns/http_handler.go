@@ -2,6 +2,7 @@ package dns
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
 )
@@ -29,8 +30,7 @@ func (h *DNSHandler) HttpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dnsQuery := make([]byte, r.ContentLength)
-	_, err := r.Body.Read(dnsQuery)
+	dnsQuery, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("Failed to read request: %s", err.Error())
 		http.Error(w, "Failed to read request", http.StatusInternalServerError)
