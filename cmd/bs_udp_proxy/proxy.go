@@ -90,6 +90,7 @@ func startBSProxyServer() {
 			continue
 		}
 		dataCopy := make([]byte, n)
+		log.Printf("Got message: %s\n", string(dataCopy))
 		copy(dataCopy, buf[:n])
 		go handleClient(conn, clientAddr, dataCopy, n)
 	}
