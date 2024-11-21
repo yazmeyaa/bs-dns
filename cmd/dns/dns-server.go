@@ -4,12 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/pressly/goose/v3"
 	"github.com/redis/go-redis/v9"
@@ -55,38 +53,38 @@ func initServices() (*sql.DB, *redis.Client, error) {
 	return db, rc, nil
 }
 
-func startDNSServer(rc *redis.Client) {
-	udpAddr, err := net.ResolveUDPAddr("udp", Address)
-	if err != nil {
-		log.Fatal("Failed to resolve UDP address", err)
-	}
+// func startDNSServer(rc *redis.Client) {
+// 	udpAddr, err := net.ResolveUDPAddr("udp", Address)
+// 	if err != nil {
+// 		log.Fatal("Failed to resolve UDP address", err)
+// 	}
 
-	udpConn, err := net.ListenUDP("udp", udpAddr)
-	if err != nil {
-		log.Fatal("Failed to bind to address", err)
-	}
-	defer udpConn.Close()
+// 	udpConn, err := net.ListenUDP("udp", udpAddr)
+// 	if err != nil {
+// 		log.Fatal("Failed to bind to address", err)
+// 	}
+// 	defer udpConn.Close()
 
-	buf := make([]byte, 512)
-	for {
-		_, source, err := udpConn.ReadFromUDP(buf)
-		start := time.Now()
-		log.Print("Ping\n")
-		if err != nil {
-			log.Println("Failed to receive data", err)
-			continue
-		}
+// 	buf := make([]byte, 512)
+// 	for {
+// 		_, source, err := udpConn.ReadFromUDP(buf)
+// 		start := time.Now()
+// 		log.Print("Ping\n")
+// 		if err != nil {
+// 			log.Println("Failed to receive data", err)
+// 			continue
+// 		}
 
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+// 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
 
-		dnsHandler := dns.NewDNSHandler(rc)
-		udpWriter := dns.NewUDPResponseWriter(udpConn, source)
-		dnsHandler.HandleDNSQuery(ctx, buf, udpWriter)
-		cancel()
+// 		dnsHandler := dns.NewDNSHandler(rc)
+// 		udpWriter := dns.NewUDPResponseWriter(udpConn, source)
+// 		dnsHandler.HandleDNSQuery(ctx, buf, udpWriter)
+// 		cancel()
 
-		log.Printf("Processing time: %d ms", time.Since(start).Milliseconds())
-	}
-}
+// 		log.Printf("Processing time: %d ms", time.Since(start).Milliseconds())
+// 	}
+// }
 
 func startHTTPServer(dnsHandler *dns.DNSHandler) {
 	mux := http.NewServeMux()
@@ -117,10 +115,10 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	go func() {
-		log.Printf("Started DNS server on %s", Address)
-		startDNSServer(rc)
-	}()
+	// go func() {
+	// 	log.Printf("Started DNS server on %s", Address)
+	// 	startDNSServer(rc)
+	// }()
 
 	go func() {
 		log.Println("Starting DoH server...")
