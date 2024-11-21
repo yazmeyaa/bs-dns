@@ -60,6 +60,8 @@ func handleClient(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte, n int
 		return
 	}
 
+	log.Printf("Send message: %s\n", string(buf))
+
 	_, err = conn.WriteToUDP(buf[:n], clientAddr)
 	if err != nil {
 		log.Printf("Error sending data to client: %v", err)
