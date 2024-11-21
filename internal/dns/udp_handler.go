@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -63,14 +64,26 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 
 	record, err := records.GetDNSRecord(ctx, h.rc, q.QName)
 	if err != nil {
-		if errors.Is(err, records.ErrRecordNotFound) {
-			log.Printf("Record with domain name [%s] not found", q.QName)
-		} else {
-			log.Printf("Error while getting record: %s", err.Error())
-		}
+
+		var query bytes.Buffer
+
 		res.Write(hdr.Encode())
 		res.Write(q.Encode())
-		writer.WriteToResponse(res.Bytes())
+		fwd, err := h.forwardQuery(query.Bytes())
+
+		if err != nil {
+			if errors.Is(err, records.ErrRecordNotFound) {
+				log.Printf("Record with domain name [%s] not found", q.QName)
+			} else {
+				log.Printf("Error while getting record: %s", err.Error())
+			}
+			res.Write(hdr.Encode())
+			res.Write(q.Encode())
+			writer.WriteToResponse(res.Bytes())
+			return
+		}
+
+		writer.WriteToResponse(fwd)
 		return
 	}
 
@@ -110,4 +123,29 @@ func (h *DNSHandler) HandleUDPQuery(udpConn *net.UDPConn, buf []byte) {
 	cancel()
 
 	log.Printf("Processing time: %d ms", time.Since(start).Milliseconds())
+}
+
+func (h *DNSHandler) forwardQuery(query []byte) ([]byte, error) {
+	upstreamServer := "8.8.8.8:53"
+
+	conn, err := net.Dial("udp", upstreamServer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to upstream DNS server: %w", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Write(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send query to upstream server: %w", err)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+	response := make([]byte, 512)
+	n, err := conn.Read(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response from upstream server: %w", err)
+	}
+
+	return response[:n], nil
 }
