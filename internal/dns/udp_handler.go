@@ -49,7 +49,6 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 	}
 
 	hdr := header.ReadHeader(buf[:12])
-	hdr.IsResponse = true
 	q, _ := question.ReadQuestion(buf[12:])
 	hdr.QDCount = 1
 
@@ -96,6 +95,7 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 	}
 	hdr.ANCount++
 	hdr.ResponseCode = header.RCODE_NO_ERROR
+	hdr.IsResponse = true
 
 	res.Write(hdr.Encode())
 	res.Write(q.Encode())
