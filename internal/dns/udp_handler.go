@@ -3,10 +3,10 @@ package dns
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -42,87 +42,57 @@ func NewDNSHandler(rc *redis.Client) *DNSHandler {
 	return &DNSHandler{rc: rc}
 }
 
-func ParseDNSResponse(data []byte) ([]answer.Answer, error) {
-	hdr := header.ReadHeader(data)
-	offset := 12
-
-	for i := 0; i < int(hdr.QDCount); i++ {
-		_, questionSize := question.ReadQuestion(data[offset:])
-		offset += questionSize
-	}
-
-	var answers []answer.Answer
-	for i := 0; i < int(hdr.ANCount); i++ {
-		ans := answer.ReadAnswer(data, &offset)
-		answers = append(answers, ans)
-	}
-
-	return answers, nil
-}
-
 func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer ResponseWriter) {
 	if len(buf) < 12 {
 		log.Println("Invalid DNS query, too small")
 		return
 	}
 
+	/* Header has fixed length (12 bytes)  */
 	hdr := header.ReadHeader(buf[:12])
-	q, _ := question.ReadQuestion(buf[12:])
-	hdr.QDCount = 1
+	questions := make([]question.Question, hdr.QDCount)
+	currentQuestionPos := 13
+
+	for x := 0; x < int(hdr.QDCount); x++ {
+		/* 1. Read whole question, get offset in bytes. */
+		q, offset := question.ReadQuestion(buf[currentQuestionPos:])
+		/* 2. Add question to slice */
+		questions[x] = q
+		/* 3. Add offset to position pointer */
+		currentQuestionPos += offset
+	}
+
+	var answers []answer.Answer
+
+	for _, q := range questions {
+		ctx, cancel := context.WithDeadline(ctx, time.Now().Add(time.Second*4))
+		defer cancel()
+		r, err := records.GetDNSRecord(ctx, h.rc, q.QName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot resolve answer for domain name: [%s]. Error: %s", q.QName, err.Error())
+			continue
+		}
+		answer := answer.Answer{
+			Name:   q.QName,
+			Data:   r.GetIPAddrBytes(),
+			QType:  q.QType,
+			QClass: q.QClass,
+			TTL:    86400,
+		}
+		answers = append(answers, answer)
+	}
+	hdr.ANCount = uint16(len(answers))
 
 	var res bytes.Buffer
-	if q.QType == 28 {
-		hdr.ResponseCode = header.RCODE_NOT_IMPLEMENTED
-		res.Write(hdr.Encode())
-		res.Write(q.Encode())
-		writer.WriteToResponse(res.Bytes())
-		return
-	}
-
-	record, err := records.GetDNSRecord(ctx, h.rc, q.QName)
-	if err != nil {
-		var query bytes.Buffer
-
-		query.Write(hdr.Encode())
-		query.Write(q.Encode())
-		fwd, err := h.forwardQuery(query.Bytes())
-
-		if err != nil {
-			if errors.Is(err, records.ErrRecordNotFound) {
-				log.Printf("Record with domain name [%s] not found", q.QName)
-			} else {
-				log.Printf("Error while getting record: %s", err.Error())
-			}
-			res.Write(hdr.Encode())
-			res.Write(q.Encode())
-			writer.WriteToResponse(res.Bytes())
-			return
-		}
-
-		ans, _ := ParseDNSResponse(fwd)
-
-		log.Printf("Resolved domain name: %s => %s", q.QName, ans[0].Data)
-
-		writer.WriteToResponse(fwd)
-		return
-	}
-
-	ans := answer.Answer{
-		Name:   q.QName,
-		QType:  question.TYPE_HOST,
-		QClass: question.CLASS_INTERNET,
-		TTL:    0,
-		Data:   record.GetIPAddrBytes(),
-	}
-	hdr.ANCount++
-	hdr.ResponseCode = header.RCODE_NO_ERROR
-	hdr.IsResponse = true
 
 	res.Write(hdr.Encode())
-	res.Write(q.Encode())
-	res.Write(ans.Encode())
+	for _, q := range questions {
+		res.Write(q.Encode())
+	}
+	for _, a := range answers {
+		res.Write(a.Encode())
+	}
 
-	log.Printf("Resolved name: %s => %s", q.QName, record.IPAddr)
 	writer.WriteToResponse(res.Bytes())
 }
 
@@ -144,30 +114,4 @@ func (h *DNSHandler) HandleUDPQuery(udpConn *net.UDPConn, buf []byte) {
 	cancel()
 
 	log.Printf("Processing time: %d ms", time.Since(start).Milliseconds())
-}
-
-func (h *DNSHandler) forwardQuery(query []byte) ([]byte, error) {
-	fmt.Printf("Q: %+v\n", query)
-	upstreamServer := "1.1.1.1:53"
-
-	conn, err := net.Dial("udp", upstreamServer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to upstream DNS server: %w", err)
-	}
-	defer conn.Close()
-
-	_, err = conn.Write(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send query to upstream server: %w", err)
-	}
-
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-
-	response := make([]byte, 512)
-	n, err := conn.Read(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response from upstream server: %w", err)
-	}
-
-	return response[:n], nil
 }
