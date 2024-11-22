@@ -51,7 +51,7 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 	/* Header has fixed length (12 bytes)  */
 	hdr := header.ReadHeader(buf[:12])
 	questions := make([]question.Question, hdr.QDCount)
-	currentQuestionPos := 13
+	currentQuestionPos := 12
 
 	log.Printf("Recieved data: %+v", buf)
 
