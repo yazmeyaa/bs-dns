@@ -7,95 +7,98 @@ import (
 	"time"
 )
 
-const (
-	localPort  = ":9339"
-	remoteHost = "game.brawlstarsgame.com"
-	remotePort = "9339"
-)
-
-var (
-	clientConnections = sync.Map{}
-)
-
-func handleClient(conn *net.UDPConn, clientAddr *net.UDPAddr, data []byte, n int) {
-	remoteAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(remoteHost, remotePort))
-	if err != nil {
-		log.Printf("Error resolving remote address: %v", err)
-		return
-	}
-
-	key := clientAddr.String()
-
-	remoteConn, _ := clientConnections.LoadOrStore(key, func() *net.UDPConn {
-		conn, err := net.DialUDP("udp", nil, remoteAddr)
-		if err != nil {
-			log.Printf("Error connecting to remote server: %v", err)
-			return nil
-		}
-
-		go func(key string, conn *net.UDPConn) {
-			time.Sleep(5 * time.Minute)
-			clientConnections.Delete(key)
-			conn.Close()
-		}(key, conn)
-
-		return conn
-	}())
-
-	if remoteConn == nil {
-		return
-	}
-
-	_, err = remoteConn.(*net.UDPConn).Write(data[:n])
-	if err != nil {
-		log.Printf("Error sending data to remote server: %v", err)
-		return
-	}
-
-	remoteConn.(*net.UDPConn).SetReadDeadline(time.Now().Add(45 * time.Second))
-	buf := make([]byte, 2048)
-	n, err = remoteConn.(*net.UDPConn).Read(buf)
-	if err != nil {
-		log.Printf("Error receiving data from remote server: %v", err)
-		return
-	}
-
-	log.Printf("Send message: %s\n", string(buf))
-
-	_, err = conn.WriteToUDP(buf[:n], clientAddr)
-	if err != nil {
-		log.Printf("Error sending data to client: %v", err)
-	}
-}
-
-func startBSProxyServer() {
-	listenAddr, err := net.ResolveUDPAddr("udp", localPort)
-	if err != nil {
-		log.Fatalf("Error resolving local address: %v", err)
-	}
-
-	conn, err := net.ListenUDP("udp", listenAddr)
-	if err != nil {
-		log.Fatalf("Error starting UDP server: %v", err)
-	}
-	defer conn.Close()
-	log.Printf("Listening on %s", localPort)
-
-	buf := make([]byte, 2048)
-
-	for {
-		n, clientAddr, err := conn.ReadFromUDP(buf)
-		if err != nil {
-			log.Printf("Error receiving data from client: %v", err)
-			continue
-		}
-		dataCopy := make([]byte, n)
-		log.Printf("Got message: %s\n", string(dataCopy))
-		copy(dataCopy, buf[:n])
-		go handleClient(conn, clientAddr, dataCopy, n)
-	}
+type client struct {
+	Addr       net.Addr
+	LastActive time.Time
+	Conn       net.Conn
 }
 
 func main() {
-	startBSProxyServer()
+	localAddr := ":9339"
+	remoteAddr := "game.brawlstarsgame.com:9339"
+
+	localConn, err := net.ListenPacket("udp", localAddr)
+	if err != nil {
+		log.Fatalf("Ошибка создания UDP-сервера на %s: %v", localAddr, err)
+	}
+	defer localConn.Close()
+
+	log.Printf("UDP-прокси запущен на %s, пересылает трафик в %s", localAddr, remoteAddr)
+
+	clients := make(map[string]*client)
+	mu := sync.Mutex{}
+
+	buffer := make([]byte, 2048)
+
+	go func() {
+		for {
+			time.Sleep(10 * time.Second)
+			mu.Lock()
+			for addr, c := range clients {
+				if time.Since(c.LastActive) > 30*time.Second {
+					log.Printf("Удаление неактивного клиента: %s", addr)
+					c.Conn.Close()
+					delete(clients, addr)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
+
+	for {
+		n, clientAddr, err := localConn.ReadFrom(buffer)
+		if err != nil {
+			log.Printf("Ошибка чтения данных: %v", err)
+			continue
+		}
+
+		clientKey := clientAddr.String()
+
+		mu.Lock()
+		c, exists := clients[clientKey]
+		if !exists {
+			remoteConn, err := net.Dial("udp", remoteAddr)
+			if err != nil {
+				log.Printf("Ошибка подключения к удалённому серверу для клиента %s: %v", clientKey, err)
+				mu.Unlock()
+				continue
+			}
+			c = &client{
+				Addr:       clientAddr,
+				LastActive: time.Now(),
+				Conn:       remoteConn,
+			}
+			clients[clientKey] = c
+
+			go func(clientKey string, c *client) {
+				remoteBuffer := make([]byte, 2048)
+				for {
+					n, err := c.Conn.Read(remoteBuffer)
+					if err != nil {
+						log.Printf("Ошибка чтения от удалённого сервера для клиента %s: %v", clientKey, err)
+						mu.Lock()
+						delete(clients, clientKey)
+						mu.Unlock()
+						return
+					}
+
+					mu.Lock()
+					_, err = localConn.WriteTo(remoteBuffer[:n], c.Addr)
+					mu.Unlock()
+					if err != nil {
+						log.Printf("Ошибка отправки данных клиенту %s: %v", clientKey, err)
+						return
+					}
+				}
+			}(clientKey, c)
+		}
+		c.LastActive = time.Now()
+		mu.Unlock()
+
+		_, err = c.Conn.Write(buffer[:n])
+		if err != nil {
+			log.Printf("Ошибка пересылки данных от клиента %s на сервер: %v", clientKey, err)
+			continue
+		}
+	}
 }
