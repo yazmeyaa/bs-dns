@@ -1,6 +1,9 @@
 package question
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"log"
+)
 
 type Class uint16
 
@@ -47,6 +50,11 @@ func ReadLabel(data []byte, offset *int) string {
 		length := int(data[*offset])
 		*offset++
 		if length == 0 {
+			break
+		}
+
+		if *offset+length > len(data) {
+			log.Println("Error: Label length exceeds available data")
 			break
 		}
 		labels = append(labels, data[*offset:*offset+length]...)
