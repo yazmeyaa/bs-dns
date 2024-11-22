@@ -93,13 +93,6 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 		res.Write(a.Encode())
 	}
 
-	str := "["
-	for _, a := range answers {
-		str += fmt.Sprintf("%s => %+v, ", a.Name, a.Data)
-	}
-	str += "]"
-	log.Printf("Resolved names: %s\n", str)
-
 	writer.WriteToResponse(res.Bytes())
 }
 
