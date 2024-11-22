@@ -47,6 +47,10 @@ type Question struct {
 func ReadLabel(data []byte, offset *int) string {
 	var labels []byte
 	for {
+		if *offset >= len(data) {
+			log.Println("Error: Offset exceeds available data")
+			break
+		}
 		length := int(data[*offset])
 		*offset++
 		if length == 0 {
