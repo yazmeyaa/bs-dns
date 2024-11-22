@@ -42,6 +42,24 @@ func NewDNSHandler(rc *redis.Client) *DNSHandler {
 	return &DNSHandler{rc: rc}
 }
 
+func ParseDNSResponse(data []byte) ([]answer.Answer, error) {
+	hdr := header.ReadHeader(data)
+	offset := 12
+
+	for i := 0; i < int(hdr.QDCount); i++ {
+		_, questionSize := question.ReadQuestion(data[offset:])
+		offset += questionSize
+	}
+
+	var answers []answer.Answer
+	for i := 0; i < int(hdr.ANCount); i++ {
+		ans := answer.ReadAnswer(data, &offset)
+		answers = append(answers, ans)
+	}
+
+	return answers, nil
+}
+
 func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer ResponseWriter) {
 	if len(buf) < 12 {
 		log.Println("Invalid DNS query, too small")
@@ -63,7 +81,6 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 
 	record, err := records.GetDNSRecord(ctx, h.rc, q.QName)
 	if err != nil {
-
 		var query bytes.Buffer
 
 		query.Write(hdr.Encode())
@@ -81,6 +98,10 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 			writer.WriteToResponse(res.Bytes())
 			return
 		}
+
+		ans, _ := ParseDNSResponse(fwd)
+
+		log.Printf("Resolved domain name: %s => %s", q.QName, ans[0].Data)
 
 		writer.WriteToResponse(fwd)
 		return
