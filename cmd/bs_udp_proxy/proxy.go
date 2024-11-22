@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net"
 	"sync"
@@ -14,6 +15,15 @@ type client struct {
 }
 
 func main() {
+	net.DefaultResolver = &net.Resolver{
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{
+				Timeout: 2 * time.Second,
+			}
+			return d.DialContext(ctx, network, address)
+		},
+	}
+
 	localAddr := ":9339"
 	remoteAddr := "game.brawlstarsgame.com:9339"
 
