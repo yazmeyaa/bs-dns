@@ -25,23 +25,22 @@ func main() {
 
 	log.Printf("UDP-прокси запущен на %s, пересылает трафик в %s", localAddr, remoteAddr)
 
-	clients := make(map[string]*client)
-	mu := sync.Mutex{}
+	var clients sync.Map
 
 	buffer := make([]byte, 2048)
 
 	go func() {
 		for {
 			time.Sleep(10 * time.Second)
-			mu.Lock()
-			for addr, c := range clients {
+			clients.Range(func(key, value interface{}) bool {
+				c := value.(*client)
 				if time.Since(c.LastActive) > 30*time.Second {
-					log.Printf("Удаление неактивного клиента: %s", addr)
+					log.Printf("Удаление неактивного клиента: %s", key.(string))
 					c.Conn.Close()
-					delete(clients, addr)
+					clients.Delete(key)
 				}
-			}
-			mu.Unlock()
+				return true
+			})
 		}
 	}()
 
@@ -52,15 +51,16 @@ func main() {
 			continue
 		}
 
+		log.Printf("Got message from client: %s", string(buffer[:n]))
+
 		clientKey := clientAddr.String()
 
-		mu.Lock()
-		c, exists := clients[clientKey]
+		clientValue, exists := clients.Load(clientKey)
+		var c *client
 		if !exists {
 			remoteConn, err := net.Dial("udp", remoteAddr)
 			if err != nil {
 				log.Printf("Ошибка подключения к удалённому серверу для клиента %s: %v", clientKey, err)
-				mu.Unlock()
 				continue
 			}
 			c = &client{
@@ -68,7 +68,7 @@ func main() {
 				LastActive: time.Now(),
 				Conn:       remoteConn,
 			}
-			clients[clientKey] = c
+			clients.Store(clientKey, c)
 
 			go func(clientKey string, c *client) {
 				remoteBuffer := make([]byte, 2048)
@@ -76,29 +76,25 @@ func main() {
 					n, err := c.Conn.Read(remoteBuffer)
 					if err != nil {
 						log.Printf("Ошибка чтения от удалённого сервера для клиента %s: %v", clientKey, err)
-						mu.Lock()
-						delete(clients, clientKey)
-						mu.Unlock()
+						clients.Delete(clientKey)
 						return
 					}
 
-					mu.Lock()
 					_, err = localConn.WriteTo(remoteBuffer[:n], c.Addr)
-					mu.Unlock()
 					if err != nil {
 						log.Printf("Ошибка отправки данных клиенту %s: %v", clientKey, err)
 						return
 					}
 				}
 			}(clientKey, c)
+		} else {
+			c = clientValue.(*client)
+			c.LastActive = time.Now()
 		}
-		c.LastActive = time.Now()
-		mu.Unlock()
 
 		_, err = c.Conn.Write(buffer[:n])
 		if err != nil {
 			log.Printf("Ошибка пересылки данных от клиента %s на сервер: %v", clientKey, err)
-			continue
 		}
 	}
 }
