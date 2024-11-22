@@ -16,11 +16,12 @@ type client struct {
 
 func main() {
 	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 			d := net.Dialer{
 				Timeout: 2 * time.Second,
 			}
-			return d.DialContext(ctx, network, address)
+			return d.DialContext(ctx, network, "8.8.8.8:53")
 		},
 	}
 
