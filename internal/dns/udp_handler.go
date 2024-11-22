@@ -53,8 +53,6 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 	questions := make([]question.Question, hdr.QDCount)
 	currentQuestionPos := 12
 
-	log.Printf("Recieved data: %+v", buf)
-
 	for x := 0; x < int(hdr.QDCount); x++ {
 		/* 1. Read whole question, get offset in bytes. */
 		q, offset := question.ReadQuestion(buf[currentQuestionPos:])
@@ -94,6 +92,13 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 	for _, a := range answers {
 		res.Write(a.Encode())
 	}
+
+	str := "["
+	for _, a := range answers {
+		str += fmt.Sprintf("%s => %+v, ", a.Name, a.Data)
+	}
+	str += "]"
+	log.Printf("Resolved names: %s\n", str)
 
 	writer.WriteToResponse(res.Bytes())
 }
