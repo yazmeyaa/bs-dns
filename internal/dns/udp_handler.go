@@ -82,6 +82,7 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 		answers = append(answers, answer)
 	}
 	hdr.ANCount = uint16(len(answers))
+	hdr.IsResponse = true
 
 	var res bytes.Buffer
 
