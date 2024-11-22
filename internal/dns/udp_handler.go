@@ -53,6 +53,8 @@ func (h *DNSHandler) HandleDNSQuery(ctx context.Context, buf []byte, writer Resp
 	questions := make([]question.Question, hdr.QDCount)
 	currentQuestionPos := 13
 
+	log.Printf("Recieved data: %+v", buf)
+
 	for x := 0; x < int(hdr.QDCount); x++ {
 		/* 1. Read whole question, get offset in bytes. */
 		q, offset := question.ReadQuestion(buf[currentQuestionPos:])
